@@ -1,3 +1,4 @@
+# Wazuh App Copyright (C) 2018 Wazuh Inc. (License GPLv2)
 # Paramas file
 class wazuh::params {
   case $::kernel {
@@ -46,16 +47,14 @@ class wazuh::params {
           $service_has_status  = false
           $ossec_service_provider = undef
           $api_service_provider = undef
-
-          $default_local_files = {
-            '/var/log/syslog'                      => 'syslog',
-            '/var/log/kern.log'                    => 'syslog',
-            '/var/log/auth.log'                    => 'syslog',
-            '/var/log/mail.log'                    => 'syslog',
-            '/var/log/dpkg.log'                    => 'syslog',
-            '/var/ossec/logs/active-responses.log' => 'syslog',
-          }
-
+          $default_local_files = [
+            {  'location' => '/var/log/syslog' , 'log_format' => 'syslog'},
+            {  'location' => '/var/log/kern.log' , 'log_format' => 'syslog'},
+            {  'location' => '/var/log/auth.log' , 'log_format' => 'syslog'},
+            {  'location' => '/var/log/mail.log' , 'log_format' => 'syslog'},
+            {  'location' => '/var/log/dpkg.log', 'log_format' => 'syslog'},
+            {  'location' => '/var/ossec/logs/active-responses.log', 'log_format' => 'syslog'},
+          ]
           case $::lsbdistcodename {
             'xenial': {
               $server_service = 'wazuh-manager'
@@ -84,7 +83,7 @@ class wazuh::params {
                 }
               }
             }
-            /^(wheezy|stretch|sid|precise|trusty|vivid|wily|xenial)$/: {
+            /^(wheezy|stretch|sid|precise|trusty|vivid|wily|xenial|bionic)$/: {
               $server_service = 'wazuh-manager'
               $server_package = 'wazuh-manager'
               $api_service = 'wazuh-api'
@@ -106,17 +105,15 @@ class wazuh::params {
           $api_service = 'wazuh-api'
           $api_package = 'wazuh-api'
           $service_has_status  = true
-          $ossec_service_provider = 'redhat'
-          $api_service_provider = 'redhat'
 
-          $default_local_files = {
-            '/var/log/messages'         => 'syslog',
-            '/var/log/secure'           => 'syslog',
-            '/var/log/maillog'          => 'syslog',
-            '/var/log/yum.log'          => 'syslog',
-            '/var/log/httpd/access_log' => 'apache',
-            '/var/log/httpd/error_log'  => 'apache'
-          }
+          $default_local_files =[
+              {  'location' => '/var/log/messages' , 'log_format' => 'syslog'},
+              {  'location' => '/var/log/secure' , 'log_format' => 'syslog'},
+              {  'location' => '/var/log/maillog', 'log_format' => 'syslog'},
+              {  'location' => '/var/log/yum.log' , 'log_format' => 'syslog'},
+              {  'location' => '/var/log/httpd/access_log' , 'log_format' => 'apache'},
+              {  'location' => '/var/log/httpd/error_log' , 'log_format' => 'apache'},
+          ]
           case $::operatingsystem {
             'Amazon': {
               # Amazon is based on Centos-6 with some improvements
@@ -124,9 +121,11 @@ class wazuh::params {
               # Probably best to leave this undef until we can
               # write/find a release-specific file.
               $wodle_openscap_content = undef
-           }
+            }
             'CentOS': {
               if ( $::operatingsystemrelease =~ /^6.*/ ) {
+                $ossec_service_provider = 'redhat'
+                $api_service_provider = 'redhat'
                 $wodle_openscap_content = {
                   'ssg-centos-6-ds.xml' => {
                     'type' => 'xccdf',
@@ -135,6 +134,8 @@ class wazuh::params {
                 }
               }
               if ( $::operatingsystemrelease =~ /^7.*/ ) {
+                $ossec_service_provider = 'systemd'
+                $api_service_provider = 'systemd'
                 $wodle_openscap_content = {
                   'ssg-centos-7-ds.xml' => {
                     'type' => 'xccdf',
@@ -145,6 +146,8 @@ class wazuh::params {
             }
             /^(RedHat|OracleLinux)$/: {
               if ( $::operatingsystemrelease =~ /^6.*/ ) {
+                $ossec_service_provider = 'redhat'
+                $api_service_provider = 'redhat'
                 $wodle_openscap_content = {
                   'ssg-rhel-6-ds.xml' => {
                     'type' => 'xccdf',
@@ -156,6 +159,8 @@ class wazuh::params {
                 }
               }
               if ( $::operatingsystemrelease =~ /^7.*/ ) {
+                $ossec_service_provider = 'systemd'
+                $api_service_provider = 'systemd'
                 $wodle_openscap_content = {
                   'ssg-rhel-7-ds.xml' => {
                     'type' => 'xccdf',
@@ -169,6 +174,8 @@ class wazuh::params {
             }
             'Fedora': {
               if ( $::operatingsystemrelease =~ /^(23|24|25).*/ ) {
+                $ossec_service_provider = 'redhat'
+                $api_service_provider = 'redhat'
                 $wodle_openscap_content = {
                   'ssg-fedora-ds.xml' => {
                     'type' => 'xccdf',
@@ -197,7 +204,7 @@ class wazuh::params {
       $keys_group = 'Administrators'
 
       $agent_service  = 'OssecSvc'
-      $agent_package  = 'Wazuh Agent 2.0'
+      $agent_package  = 'Wazuh Agent 3.7.2'
       $server_service = ''
       $server_package = ''
       $api_service = ''
@@ -207,7 +214,12 @@ class wazuh::params {
       # TODO
       $validate_cmd_conf = undef
       # Pushed by shared agent config now
-      $default_local_files = {}
+      $default_local_files =  [
+        {'location' => 'Security' , 'log_format' => 'eventchannel', 'query' => 'Event/System[EventID != 5145 and EventID != 5156 and EventID != 5447 and EventID != 4656 and EventID != 4658 and EventID != 4663 and EventID != 4660 and EventID != 4670 and EventID != 4690 and EventID != 4703 and EventID != 4907]'},
+        {'location' => 'System' , 'log_format' =>  'eventlog'  },
+        {'location' => 'active-response\active-responses.log' , 'log_format' =>  'syslog'  },
+      ]
+
     }
   default: { fail('This ossec module has not been tested on your distribution') }
   }

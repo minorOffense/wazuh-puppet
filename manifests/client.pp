@@ -1,44 +1,52 @@
+# Wazuh App Copyright (C) 2018 Wazuh Inc. (License GPLv2)
 # Setup for ossec client
 class wazuh::client(
-  $ossec_active_response       = true,
-  $ossec_rootcheck             = true,
-  $ossec_rootcheck_frequency   = 36000,
-  $ossec_rootcheck_checkports  = true,
-  $ossec_rootcheck_checkfiles  = true,
-  $ossec_server_ip             = undef,
-  $ossec_server_hostname       = undef,
-  $ossec_server_port           = '1514',
-  $ossec_server_protocol       = 'udp',
-  $ossec_server_notify_time    = undef,
-  $ossec_server_time_reconnect = undef,
-  $ossec_scanpaths             = [],
-  $ossec_emailnotification     = 'yes',
-  $ossec_ignorepaths           = [],
-  $ossec_ignorepaths_regex     = [],
-  $ossec_local_files           = $::wazuh::params::default_local_files,
-  $ossec_syscheck_frequency    = 43200,
-  $ossec_prefilter             = false,
-  $ossec_service_provider      = $::wazuh::params::ossec_service_provider,
-  $ossec_config_profiles       = [],
-  $selinux                     = false,
-  $agent_name                  = $::hostname,
-  $agent_ip_address            = $::ipaddress,
-  $manage_repo                 = true,
-  $manage_epel_repo            = true,
-  $agent_package_name          = $::wazuh::params::agent_package,
-  $agent_package_version       = 'installed',
-  $agent_service_name          = $::wazuh::params::agent_service,
-  $manage_client_keys          = 'export',
-  $agent_auth_password         = undef,
-  $wazuh_manager_root_ca_pem   = undef,
-  $agent_seed                  = undef,
-  $max_clients                 = 3000,
-  $ar_repeated_offenders       = '',
-  $enable_wodle_openscap       = false,
-  $wodle_openscap_content      = $::wazuh::params::wodle_openscap_content,
-  $service_has_status          = $::wazuh::params::service_has_status,
-  $ossec_conf_template         = 'wazuh/wazuh_agent.conf.erb',
-  Boolean $manage_firewall     = $::wazuh::params::manage_firewall,
+  $ossec_active_response           = true,
+  $ossec_rootcheck                 = true,
+  $ossec_rootcheck_frequency       = 36000,
+  $ossec_rootcheck_checkports      = true,
+  $ossec_rootcheck_checkfiles      = true,
+  $ossec_server_ip                 = undef,
+  $ossec_server_hostname           = undef,
+  $wazuh_manager_address           = undef,
+  $ossec_server_port               = '1514',
+  $ossec_server_protocol           = 'udp',
+  $ossec_server_notify_time        = undef,
+  $ossec_server_time_reconnect     = undef,
+  $ossec_scanpaths                 = [],
+  $ossec_ignorepaths               = [],
+  $ossec_ignorepaths_regex         = [],
+  $ossec_local_files               = $::wazuh::params::default_local_files,
+  $ossec_syscheck_frequency        = 43200,
+  $ossec_prefilter                 = false,
+  $ossec_service_provider          = $::wazuh::params::ossec_service_provider,
+  $ossec_config_profiles           = [],
+  $selinux                         = false,
+  $agent_name                      = $::hostname,
+  $agent_ip_address                = $::ipaddress,
+  $agent_group                     = 'default',
+  $manage_repo                     = true,
+  $manage_epel_repo                = true,
+  $agent_package_name              = $::wazuh::params::agent_package,
+  $agent_package_version           = 'installed',
+  $agent_service_name              = $::wazuh::params::agent_service,
+  $agent_auto_restart              = 'yes',
+  # client_buffer configuration
+  $client_buffer_queue_size        = 5000,
+  $client_buffer_events_per_second = 500,
+  $manage_client_keys              = 'authd',
+  $agent_auth_password             = undef,
+  $wazuh_manager_root_ca_pem       = undef,
+  $wazuh_agent_cert                = undef,
+  $wazuh_agent_key                 = undef,
+  $agent_seed                      = undef,
+  $max_clients                     = 3000,
+  $ar_repeated_offenders           = '',
+  $enable_wodle_openscap           = false,
+  $wodle_openscap_content          = $::wazuh::params::wodle_openscap_content,
+  $service_has_status              = $::wazuh::params::service_has_status,
+  $ossec_conf_template             = 'wazuh/wazuh_agent.conf.erb',
+  Boolean $manage_firewall         = $::wazuh::params::manage_firewall,
 ) inherits wazuh::params {
   validate_bool(
     $ossec_active_response, $ossec_rootcheck,
@@ -50,8 +58,8 @@ class wazuh::client(
   validate_string($agent_package_name)
   validate_string($agent_service_name)
 
-  if ( ( $ossec_server_ip == undef ) and ( $ossec_server_hostname == undef ) ) {
-    fail('must pass either $ossec_server_ip or $ossec_server_hostname to Class[\'wazuh::client\'].')
+  if ( ( $ossec_server_ip == undef ) and ( $ossec_server_hostname == undef ) and ( $wazuh_manager_address == undef ) ) {
+    fail('must pass either $ossec_server_ip or $ossec_server_hostname or $wazuh_manager_address to Class[\'wazuh::client\'].')
   }
 
   case $::kernel {
@@ -63,28 +71,38 @@ class wazuh::client(
         } else {
           Class['wazuh::repo'] -> Package[$agent_package_name]
         }
-        package { $agent_package_name:
-          ensure => $agent_package_version
-        }
+      }
+      package { $agent_package_name:
+        ensure => $agent_package_version, # lint:ignore:security_package_pinned_version
       }
     }
     'windows' : {
 
       file {
-        'C:/wazuh-winagent-v2.1.1-1.exe':
+        'C:/wazuh-agent-3.8.0-1.msi':
           owner              => 'Administrators',
           group              => 'Administrators',
           mode               => '0774',
-          source             => 'puppet:///modules/wazuh/wazuh-winagent-v2.1.1-1.exe',
+          source             => 'puppet:///modules/wazuh/wazuh-agent-3.8.0-1.msi',
           source_permissions => ignore
       }
-
-      package { $agent_package_name:
-        ensure          => $agent_package_version,
-        provider        => 'windows',
-        source          => 'C:/wazuh-winagent-v2.1.1-1.exe',
-        install_options => [ '/S' ],  # Nullsoft installer silent installation
-        require         => File['C:/wazuh-winagent-v2.1.1-1.exe'],
+      if ( $manage_client_keys == 'authd' ) {
+        package { $agent_package_name:
+          ensure          => $agent_package_version, # lint:ignore:security_package_pinned_version
+          provider        => 'windows',
+          source          => 'C:/wazuh-agent-3.8.0-1.msi',
+          install_options => [ '/q', "ADDRESS=${ossec_server_ip}", "AUTHD_SERVER=${ossec_server_ip}" ],  # silent installation
+          require         => File['C:/wazuh-agent-3.8.0-1.msi'],
+        }
+      }
+      else {
+        package { $agent_package_name:
+          ensure          => $agent_package_version, # lint:ignore:security_package_pinned_version
+          provider        => 'windows',
+          source          => 'C:/wazuh-agent-3.8.0-1.msi',
+          install_options => [ '/q' ],  # silent installation
+          require         => File['C:/wazuh-agent-3.8.0-1.msi'],
+        }
       }
     }
     default: { fail('OS not supported') }
@@ -139,50 +157,72 @@ class wazuh::client(
       agent_seed       => $agent_seed,
     }
   } elsif ($manage_client_keys == 'authd') {
-    if ($::kernel != 'Linux') {
-      fail('key generation using agent-auth via puppet is not supported on this platform yet')
-    }
-    # Is this really Linux only?
-    $ossec_server_address = pick($ossec_server_ip, $ossec_server_hostname)
+    if ($::kernel == 'Linux') {
+      # Is this really Linux only?
+      $ossec_server_address = pick($ossec_server_ip, $ossec_server_hostname)
 
-    file { $::wazuh::params::keys_file:
-      owner => $wazuh::params::keys_owner,
-      group => $wazuh::params::keys_group,
-      mode  => $wazuh::params::keys_mode,
-    }
+      file { $::wazuh::params::keys_file:
+        owner => $wazuh::params::keys_owner,
+        group => $wazuh::params::keys_group,
+        mode  => $wazuh::params::keys_mode,
+      }
 
-    # https://documentation.wazuh.com/current/user-manual/registering/use-registration-service.html#verify-manager-via-ssl
-    $agent_auth_base_command = "/var/ossec/bin/agent-auth -m ${ossec_server_address} -A ${agent_name} -D /var/ossec/"
-    if $wazuh_manager_root_ca_pem != undef {
-      validate_string($wazuh_manager_root_ca_pem)
-      file { '/var/ossec/etc/rootCA.pem':
+      # https://documentation.wazuh.com/current/user-manual/registering/use-registration-service.html#verify-manager-via-ssl
+
+      $agent_auth_base_command = "/var/ossec/bin/agent-auth -m ${ossec_server_address} -A ${agent_name} -G ${agent_group} -D /var/ossec/"
+      if $wazuh_manager_root_ca_pem != undef {
+        validate_string($wazuh_manager_root_ca_pem)
+        file { '/var/ossec/etc/rootCA.pem':
+          owner   => $wazuh::params::keys_owner,
+          group   => $wazuh::params::keys_group,
+          mode    => $wazuh::params::keys_mode,
+          content => $wazuh_manager_root_ca_pem,
+          require => Package[$agent_package_name],
+        }
+          $agent_auth_option_manager = '-v /var/ossec/etc/rootCA.pem'
+      }
+
+    # https://documentation.wazuh.com/current/user-manual/registering/use-registration-service.html#verify-agents-via-ssl
+    if ($wazuh_agent_cert != undef) and ($wazuh_agent_key != undef) {
+      validate_string($wazuh_agent_cert)
+      validate_string($wazuh_agent_key)
+      file { '/var/ossec/etc/sslagent.cert':
         owner   => $wazuh::params::keys_owner,
         group   => $wazuh::params::keys_group,
         mode    => $wazuh::params::keys_mode,
-        content => $wazuh_manager_root_ca_pem,
+        content => $wazuh_agent_cert,
+        require => Package[$agent_package_name],
+      }
+      file { '/var/ossec/etc/sslagent.key':
+        owner   => $wazuh::params::keys_owner,
+        group   => $wazuh::params::keys_group,
+        mode    => $wazuh::params::keys_mode,
+        content => $wazuh_agent_key,
         require => Package[$agent_package_name],
       }
 
-      $agent_auth_command = "${agent_auth_base_command} -v /var/ossec/etc/rootCA.pem"
-    } else {
-      $agent_auth_command = $agent_auth_base_command
+      $agent_auth_option_agent = '-x /var/ossec/etc/sslagent.cert -k /var/ossec/etc/sslagent.key'
     }
 
-    if $agent_auth_password {
-      exec { 'agent-auth-with-pwd':
-        command => "${agent_auth_command} -P '${agent_auth_password}'",
-        unless  => "/bin/egrep -q '.' ${::wazuh::params::keys_file}",
-        require => Package[$agent_package_name],
-        notify  => Service[$agent_service_name],
-        before  => File[$wazuh::params::keys_file]
-      }
-    } else {
-      exec { 'agent-auth-without-pwd':
-        command => $agent_auth_command,
-        unless  => "/bin/egrep -q '.' ${::wazuh::params::keys_file}",
-        require => Package[$agent_package_name],
-        notify  => Service[$agent_service_name],
-        before  => File[$wazuh::params::keys_file],
+    $agent_auth_command = "${agent_auth_base_command} ${agent_auth_option_manager} ${agent_auth_option_agent}"
+
+
+      if $agent_auth_password {
+        exec { 'agent-auth-with-pwd':
+          command => "${agent_auth_command} -P '${agent_auth_password}'",
+          unless  => "/bin/egrep -q '.' ${::wazuh::params::keys_file}",
+          require => Package[$agent_package_name],
+          notify  => Service[$agent_service_name],
+          before  => File[$wazuh::params::keys_file]
+          }
+      } else {
+        exec { 'agent-auth-without-pwd':
+          command => $agent_auth_command,
+          unless  => "/bin/egrep -q '.' ${::wazuh::params::keys_file}",
+          require => Package[$agent_package_name],
+          notify  => Service[$agent_service_name],
+          before  => File[$wazuh::params::keys_file],
+        }
       }
     }
   }
@@ -196,16 +236,16 @@ class wazuh::client(
     }
   }
   # Manage firewall
- if $manage_firewall {
-   include firewall
-   firewall { '1514 wazuh-agent':
-     dport  => $ossec_server_port,
-     proto  => $ossec_server_protocol,
-     action => 'accept',
-     state  => [
-       'NEW',
-       'RELATED',
-       'ESTABLISHED'],
-   }
+  if $manage_firewall {
+    include firewall
+    firewall { '1514 wazuh-agent':
+      dport  => $ossec_server_port,
+      proto  => $ossec_server_protocol,
+      action => 'accept',
+      state  => [
+        'NEW',
+        'RELATED',
+        'ESTABLISHED'],
+    }
   }
 }
